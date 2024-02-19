@@ -1,0 +1,25 @@
+rootProject.name = 'sample-fix-cppSource-pattern'
+include('app', 'lib')
+
+gradle.allprojects {
+    components.withType(CppComponent).configureEach { component ->
+        component.ext.cppSource = component.cppSource + files({
+            FileTree tree
+            if (component.source.getFrom().isEmpty()) {
+                tree = layout.projectDirectory.dir("src/${component.name}/cpp").asFileTree
+            } else {
+                tree = component.source.asFileTree
+            }
+            return tree.matching { it.include('**/*.cxx') }
+        })
+        component.binaries.configureEach(CppBinary) { binary ->
+            try {
+                binary.compileTask.get().source.from(component.ext.cppSource.asFileTree)
+            } catch (IllegalStateException e) {
+                // We only log the failure as the `cppSource` may be wired through a different process
+                //   See per-source file compiler args sample.
+                logger.info("Could not wire shadowed 'cppSource' from $component in $project to ${binary.compileTask.get()}.")
+            }
+        }
+    }
+}
