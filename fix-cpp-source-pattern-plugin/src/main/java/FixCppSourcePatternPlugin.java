@@ -13,7 +13,7 @@ public abstract class FixCppSourcePatternPlugin implements Plugin<Project> {
     @Override
     public void apply(Project project) {
         project.getComponents().withType(CppComponent.class).configureEach(component -> {
-            ((ExtensionAware) component).getExtensions().getExtraProperties().set("cppSource", project.getObjects().fileCollection().from(cppSourceOf(component)).from((Callable<Object>) () -> {
+            setCppSource(component, project.getObjects().fileCollection().from(cppSourceOf(component)).from((Callable<Object>) () -> {
                 FileTree tree;
                 if (component.getSource().getFrom().isEmpty()) {
                     tree = project.getLayout().getProjectDirectory().dir("src/" + component.getName() + "/cpp").getAsFileTree();
@@ -23,7 +23,7 @@ public abstract class FixCppSourcePatternPlugin implements Plugin<Project> {
                 return tree.matching(it -> it.include("**/*.cxx"));
             }));
             component.getBinaries().configureEach(CppBinary.class, binary -> {
-                ((ExtensionAware) binary).getExtensions().getExtraProperties().set("cppSource", project.getObjects().fileCollection().from(cppSourceOf(component)).from(cppSourceOf(binary)));
+                setCppSource(binary, project.getObjects().fileCollection().from(cppSourceOf(component)).from(cppSourceOf(binary)));
                 project.getTasks().named(compileTaskName(binary), CppCompile.class).configure(task -> {
                     try {
                         task.getSource().from((Callable<?>) () -> cppSourceOf(binary));
@@ -61,6 +61,10 @@ public abstract class FixCppSourcePatternPlugin implements Plugin<Project> {
         }
 
         return result;
+    }
+
+    private static void setCppSource(Object target, FileCollection value) {
+        ((ExtensionAware) target).getExtensions().getExtraProperties().set("cppSource", value);
     }
 
     //region Names
