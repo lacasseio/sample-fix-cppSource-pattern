@@ -16,15 +16,7 @@ public abstract class FixCppSourcePatternPlugin implements Plugin<Project> {
         project.getComponents().withType(CppComponent.class).configureEach(new Action<>() {
             @Override
             public void execute(CppComponent component) {
-                setCppSource(component, files(cppSourceOf(component), (Callable<Object>) () -> {
-                    FileTree tree;
-                    if (component.getSource().getFrom().isEmpty()) {
-                        tree = project.getLayout().getProjectDirectory().dir("src/" + component.getName() + "/cpp").getAsFileTree();
-                    } else {
-                        tree = component.getSource().getAsFileTree();
-                    }
-                    return tree.matching(it -> it.include("**/*.cxx"));
-                }));
+                setCppSource(component, files(cppSourceOf(component), createSourceView(component, "cxx")));
                 component.getBinaries().configureEach(CppBinary.class, binary -> {
                     setCppSource(binary, files(cppSourceOf(component), cppSourceOf(binary)));
                     project.getTasks().named(compileTaskName(binary), CppCompile.class).configure(task -> {
@@ -41,6 +33,22 @@ public abstract class FixCppSourcePatternPlugin implements Plugin<Project> {
 
             private FileCollection files(Object... paths) {
                 return project.getObjects().fileCollection().from(paths);
+            }
+
+            private Object createSourceView(CppComponent component, String... sourceExtensions) {
+                return (Callable<Object>) () -> {
+                    FileTree tree;
+                    if (component.getSource().getFrom().isEmpty()) {
+                        tree = project.getLayout().getProjectDirectory().dir("src/" + component.getName() + "/cpp").getAsFileTree();
+                    } else {
+                        tree = component.getSource().getAsFileTree();
+                    }
+                    return tree.matching(it -> {
+                        for (String sourceExtension : sourceExtensions) {
+                            it.include("**/*." + sourceExtension);
+                        }
+                    });
+                };
             }
         });
     }
