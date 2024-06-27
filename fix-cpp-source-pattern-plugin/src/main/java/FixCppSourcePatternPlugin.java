@@ -1,3 +1,4 @@
+import org.gradle.api.Action;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.file.FileCollection;
@@ -12,28 +13,35 @@ import java.util.concurrent.Callable;
 public abstract class FixCppSourcePatternPlugin implements Plugin<Project> {
     @Override
     public void apply(Project project) {
-        project.getComponents().withType(CppComponent.class).configureEach(component -> {
-            setCppSource(component, project.getObjects().fileCollection().from(cppSourceOf(component)).from((Callable<Object>) () -> {
-                FileTree tree;
-                if (component.getSource().getFrom().isEmpty()) {
-                    tree = project.getLayout().getProjectDirectory().dir("src/" + component.getName() + "/cpp").getAsFileTree();
-                } else {
-                    tree = component.getSource().getAsFileTree();
-                }
-                return tree.matching(it -> it.include("**/*.cxx"));
-            }));
-            component.getBinaries().configureEach(CppBinary.class, binary -> {
-                setCppSource(binary, project.getObjects().fileCollection().from(cppSourceOf(component)).from(cppSourceOf(binary)));
-                project.getTasks().named(compileTaskName(binary), CppCompile.class).configure(task -> {
-                    try {
-                        task.getSource().from((Callable<?>) () -> cppSourceOf(binary));
-                    } catch (IllegalStateException e) {
-                        // We only log the failure as the `cppSource` may be wired through a different process
-                        //   See per-source file compiler args sample.
-                        project.getLogger().info(String.format("Could not wire shadowed 'cppSource' from %s in %s to %s.", component, project, task));
+        project.getComponents().withType(CppComponent.class).configureEach(new Action<>() {
+            @Override
+            public void execute(CppComponent component) {
+                setCppSource(component, files(cppSourceOf(component), (Callable<Object>) () -> {
+                    FileTree tree;
+                    if (component.getSource().getFrom().isEmpty()) {
+                        tree = project.getLayout().getProjectDirectory().dir("src/" + component.getName() + "/cpp").getAsFileTree();
+                    } else {
+                        tree = component.getSource().getAsFileTree();
                     }
+                    return tree.matching(it -> it.include("**/*.cxx"));
+                }));
+                component.getBinaries().configureEach(CppBinary.class, binary -> {
+                    setCppSource(binary, files(cppSourceOf(component), cppSourceOf(binary)));
+                    project.getTasks().named(compileTaskName(binary), CppCompile.class).configure(task -> {
+                        try {
+                            task.getSource().from((Callable<?>) () -> cppSourceOf(binary));
+                        } catch (IllegalStateException e) {
+                            // We only log the failure as the `cppSource` may be wired through a different process
+                            //   See per-source file compiler args sample.
+                            project.getLogger().info(String.format("Could not wire shadowed 'cppSource' from %s in %s to %s.", component, project, task));
+                        }
+                    });
                 });
-            });
+            }
+
+            private FileCollection files(Object... paths) {
+                return project.getObjects().fileCollection().from(paths);
+            }
         });
     }
 
