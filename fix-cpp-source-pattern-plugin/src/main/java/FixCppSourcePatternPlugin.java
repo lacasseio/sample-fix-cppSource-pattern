@@ -23,9 +23,10 @@ public abstract class FixCppSourcePatternPlugin implements Plugin<Project> {
                 return tree.matching(it -> it.include("**/*.cxx"));
             }));
             component.getBinaries().configureEach(CppBinary.class, binary -> {
+                ((ExtensionAware) binary).getExtensions().getExtraProperties().set("cppSource", project.getObjects().fileCollection().from(cppSourceOf(component)).from(cppSourceOf(binary)));
                 project.getTasks().named(compileTaskName(binary), CppCompile.class).configure(task -> {
                     try {
-                        task.getSource().from((Callable<?>) () -> cppSourceOf(component));
+                        task.getSource().from((Callable<?>) () -> cppSourceOf(binary));
                     } catch (IllegalStateException e) {
                         // We only log the failure as the `cppSource` may be wired through a different process
                         //   See per-source file compiler args sample.
@@ -44,6 +45,19 @@ public abstract class FixCppSourcePatternPlugin implements Plugin<Project> {
 
         if (result == null) {
             result = component.getCppSource();
+        }
+
+        return result;
+    }
+
+    private static FileCollection cppSourceOf(CppBinary binary) {
+        FileCollection result = null;
+        if (binary instanceof ExtensionAware) {
+            result = (FileCollection) ((ExtensionAware) binary).getExtensions().getExtraProperties().getProperties().get("cppSource");
+        }
+
+        if (result == null) {
+            result = binary.getCppSource();
         }
 
         return result;
